@@ -88,12 +88,12 @@ async function downloadFile(url, path) {
     });
 }
 
-function deleteFolderRecursive(path) {
+function deleteFolderRecursiveSync(path) {
     if (fs.existsSync(path)) {
       fs.readdirSync(path).forEach((file, index) => {
         const curPath = Path.join(path, file);
         if (fs.lstatSync(curPath).isDirectory()) { // recurse
-          deleteFolderRecursive(curPath);
+          deleteFolderRecursiveSync(curPath);
         } else { // delete file
           fs.unlinkSync(curPath);
         }
@@ -102,21 +102,36 @@ function deleteFolderRecursive(path) {
     }
   };
 
-async function unzip(generatedZipFile, destDirectory, bakFile, zipFilePath) {
+async function backupAndExtract(generatedZipFile, destDirectory, bakFile, zipFilePath) {
 
     return new Promise((resolve, reject) => { 
-        fs.unlinkSync(bakFile)
-
-        fs.rename(zipFilePath, bakFile, function (err) {
-            if (err) throw err
-            console.log('Successfully renamed - AKA moved!')
-          })
-
-        deleteFolderRecursive(destDirectory);
-
         
+        //Remove bak file.
+        try {
+            fs.unlinkSync(bakFile);
+            console.log("Removed .bak file successfully", bakFile);
+        } catch (err) {
+            console.log("Could not delete .bak file", bakFile);
+        }
 
-        const ls = spawn('unzip', [generatedZipFile, "-d", destDirectory]);
+        //Rename existing zip file as .bak
+        try {
+            fs.renameSync(zipFilePath, bakFile);
+            console.log("Moved .zip file to .bak successfully", zipFilePath, bakFile);
+        } catch (e) {
+            console.log("Could not move .zip file to .bak", zipFilePath, bakFile);
+        }
+
+        //Recursively delete build folder
+        try {
+            deleteFolderRecursiveSync(destDirectory);
+            console.log("Recursively deleted build folder", destDirectory);
+        } catch (e) {
+            console.log("Could not delete build folder", destDirectory);
+        }
+
+        //unzip downloaded file as build folder.
+        const ls = spawn('unzip', ["-q", generatedZipFile, "-d", destDirectory]);
         
         ls.stdout.on('data', (data) => {
           console.log(`stdout: ${data}`);
@@ -124,48 +139,51 @@ async function unzip(generatedZipFile, destDirectory, bakFile, zipFilePath) {
         
         ls.stderr.on('data', (data) => {
           console.error(`stderr: ${data}`);
+          reject(new Error("Could not unzip ", generatedZipFile));
         });
         
         ls.on('close', (code) => {
-          console.log(`child process exited with code ${code}`);
+          console.log("Downloaded zip file expanded", generatedZipFile);
           resolve();
         });
+    }).then(_ => {
+        try {
+            fs.renameSync(generatedZipFile, zipFilePath);
+            console.log("Moved build.zip to final zip file path", generatedZipFile, zipFilePath);
+        } catch (e) {
+            console.log("Could not move build.zip to final zip file path", generatedZipFile, zipFilePath);
+        }
     })
-
 }
 
-const workFlowRunURL = "https://api.github.com/repos/Transerve-PwC/frontend/actions/runs"
 
 
-async function main() {
+async function main(owner = "Transerve-PwC", repo = "frontend") {
     try{
+        const workFlowRunURL = `https://api.github.com/repos/${owner}/${repo}/actions/runs`
         const {workflow_runs} = await readUrl(workFlowRunURL);
         const artifact_url = workflow_runs[0].artifacts_url;
         const {artifacts} = await readUrl(artifact_url);
         const citizen_build_url = artifacts.find(item => item.name.includes("citizen"))["archive_download_url"];
         const employee_build_url = artifacts.find(item => item.name.includes("employee"))["archive_download_url"];
-        //TODO: Customize file name.
-        const zipFilePath = "./build.zip";
+        const downloadedZipFilePath = "./build.zip";
 
-        //Citizen build file
+        await downloadFile(citizen_build_url, downloadedZipFilePath);
+        console.log("Citizen build downloaded successfully");
+        let destDirectory = "./citizen/build";
+        let bakZipFile = "./citizen/citizen.zip.bak";
+        let destZipFile ="./citizen/citizen.zip"
+        await backupAndExtract(downloadedZipFilePath, destDirectory, bakZipFile, destZipFile);
+        console.log("Citizen deployment completed successfully");
+        
+        await downloadFile(employee_build_url, downloadedZipFilePath);
+        console.log("Employee build downloaded successfully");
+        destDirectory = "./employee/build";
+        bakZipFile = "./employee/employee.zip.bak";
+        destZipFile ="./employee/employee.zip"
+        await backupAndExtract(downloadedZipFilePath, destDirectory, bakZipFile, destZipFile);
+        console.log("Employee deployment completed successfully");
 
-        await downloadFile(citizen_build_url, zipFilePath);
-        console.log("File downloaded successfully");
-        await unzip(zipFilePath, "./citizen/build", "./citizen/build.zip.bak", "./citizen/build.zip")
-        fs.rename(zipFilePath, "./citizen/build.zip", function (err) {
-            if (err) throw err
-            console.log('Successfully renamed - Citizen!')
-          })
-
-        //employee build file
-
-        await downloadFile(employee_build_url, zipFilePath);
-        console.log("File downloaded successfully");
-        await unzip(zipFilePath, "./employee/build", "./employee/build.zip.bak", "./employee/build.zip")
-        fs.rename(zipFilePath, "./employee/build.zip", function (err) {
-            if (err) throw err
-            console.log('Successfully renamed - Employee!')
-          })
     } catch (err) {
         console.error(err);
     }
