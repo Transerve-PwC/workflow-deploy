@@ -7,7 +7,7 @@ const { spawn } = require('child_process');
 const OAUTH_TOKEN = process.env.OAUTH_TOKEN;
 const log = {
     _log : function (type, str, ...params) {
-        console.log(type, str, ...params);
+        console.log(type, new Date().toISOString(), str, ...params);
     },
     debug : function(str, ...params) {
         this._log("DEBUG", str, ...params);
@@ -109,32 +109,32 @@ async function backupAndExtract(generatedZipFile, destDirectory, bakFile, zipFil
         //Remove bak file.
         try {
             fs.unlinkSync(bakFile);
-            console.log("Removed .bak file successfully", bakFile);
+            log.debug("Removed .bak file successfully", bakFile);
         } catch (err) {
-            console.log("Could not delete .bak file", bakFile);
+            log.debug("Could not delete .bak file", bakFile);
         }
 
         //Rename existing zip file as .bak
         try {
             fs.renameSync(zipFilePath, bakFile);
-            console.log("Moved .zip file to .bak successfully", zipFilePath, bakFile);
+            log.debug("Moved .zip file to .bak successfully", zipFilePath, bakFile);
         } catch (e) {
-            console.log("Could not move .zip file to .bak", zipFilePath, bakFile);
+            log.debug("Could not move .zip file to .bak", zipFilePath, bakFile);
         }
 
         //Recursively delete build folder
         try {
             deleteFolderRecursiveSync(destDirectory);
-            console.log("Recursively deleted build folder", destDirectory);
+            log.debug("Recursively deleted build folder", destDirectory);
         } catch (e) {
-            console.log("Could not delete build folder", destDirectory);
+            log.debug("Could not delete build folder", destDirectory);
         }
 
         //unzip downloaded file as build folder.
         const ls = spawn('unzip', ["-q", generatedZipFile, "-d", destDirectory]);
         
         ls.stdout.on('data', (data) => {
-          console.log(`stdout: ${data}`);
+          log.debug(`stdout: ${data}`);
         });
         
         ls.stderr.on('data', (data) => {
@@ -143,15 +143,15 @@ async function backupAndExtract(generatedZipFile, destDirectory, bakFile, zipFil
         });
         
         ls.on('close', (code) => {
-          console.log("Downloaded zip file expanded", generatedZipFile);
+          log.debug("Downloaded zip file expanded", generatedZipFile);
           resolve();
         });
     }).then(_ => {
         try {
             fs.renameSync(generatedZipFile, zipFilePath);
-            console.log("Moved build.zip to final zip file path", generatedZipFile, zipFilePath);
+            log.debug("Moved build.zip to final zip file path", generatedZipFile, zipFilePath);
         } catch (e) {
-            console.log("Could not move build.zip to final zip file path", generatedZipFile, zipFilePath);
+            log.debug("Could not move build.zip to final zip file path", generatedZipFile, zipFilePath);
         }
     })
 }
@@ -169,20 +169,20 @@ async function main(owner = "Transerve-PwC", repo = "frontend") {
         const downloadedZipFilePath = "./build.zip";
 
         await downloadFile(citizen_build_url, downloadedZipFilePath);
-        console.log("Citizen build downloaded successfully");
+        log.debug("Citizen build downloaded successfully");
         let destDirectory = "./citizen/build";
         let bakZipFile = "./citizen/citizen.zip.bak";
         let destZipFile ="./citizen/citizen.zip"
         await backupAndExtract(downloadedZipFilePath, destDirectory, bakZipFile, destZipFile);
-        console.log("Citizen deployment completed successfully");
+        log.debug("Citizen deployment completed successfully");
         
         await downloadFile(employee_build_url, downloadedZipFilePath);
-        console.log("Employee build downloaded successfully");
+        log.debug("Employee build downloaded successfully");
         destDirectory = "./employee/build";
         bakZipFile = "./employee/employee.zip.bak";
         destZipFile ="./employee/employee.zip"
         await backupAndExtract(downloadedZipFilePath, destDirectory, bakZipFile, destZipFile);
-        console.log("Employee deployment completed successfully");
+        log.debug("Employee deployment completed successfully");
 
     } catch (err) {
         console.error(err);
