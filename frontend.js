@@ -167,10 +167,6 @@ async function main(owner = "Transerve-PwC", repo = "frontend", buildType = 'cit
         const workFlowRunURL = `https://api.github.com/repos/${owner}/${repo}/actions/runs`
         const {workflow_runs} = await readUrl(workFlowRunURL);
         const latestWorkflow = workflow_runs[0];
-        if (latestWorkflow.status === "in_progress") {
-            log.debug(`Workflow ${latestWorkflow.id} is in progress.`);
-            return;
-        }
         log.debug(`Proceeding with deployment for latest workflow ${latestWorkflow.id} with status ${latestWorkflow.status}`);
         
         const artifact_url = workflow_runs[0].artifacts_url;
