@@ -162,6 +162,13 @@ async function main(owner = "Transerve-PwC", repo = "frontend") {
     try{
         const workFlowRunURL = `https://api.github.com/repos/${owner}/${repo}/actions/runs`
         const {workflow_runs} = await readUrl(workFlowRunURL);
+        const latestWorkflow = workflow_runs[0];
+        if (latestWorkflow.status === "in_progress") {
+            log.debug(`Workflow ${latestWorkflow.id} is in progress.`);
+            return;
+        }
+        log.debug(`Proceeding with deployment for latest workflow ${latestWorkflow.id} with status ${latestWorkflow.status}`);
+        
         const artifact_url = workflow_runs[0].artifacts_url;
         const {artifacts} = await readUrl(artifact_url);
         const citizen_build_url = artifacts.find(item => item.name.includes("citizen"))["archive_download_url"];
