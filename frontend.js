@@ -156,10 +156,14 @@ async function backupAndExtract(generatedZipFile, destDirectory, bakFile, zipFil
     })
 }
 
+async function sleep(t = 5) {
+    return new Promise(resolve => setTimeout(resolve, t * 1000));
+}
 
-
-async function main(owner = "Transerve-PwC", repo = "frontend") {
+async function main(owner = "Transerve-PwC", repo = "frontend", buildType = 'citizen') {
     try{
+        log.debug(`Waiting for 5 seconds`);
+        await sleep();
         const workFlowRunURL = `https://api.github.com/repos/${owner}/${repo}/actions/runs`
         const {workflow_runs} = await readUrl(workFlowRunURL);
         const latestWorkflow = workflow_runs[0];
@@ -171,29 +175,26 @@ async function main(owner = "Transerve-PwC", repo = "frontend") {
         
         const artifact_url = workflow_runs[0].artifacts_url;
         const {artifacts} = await readUrl(artifact_url);
-        const citizen_build_url = artifacts.find(item => item.name.includes("citizen"))["archive_download_url"];
-        const employee_build_url = artifacts.find(item => item.name.includes("employee"))["archive_download_url"];
-        const downloadedZipFilePath = "./build.zip";
+        const artifactUrl = artifacts.find(item => item.name === buildType);
+        if (typeof artifactUrl === "undefined") {
+            log.debug(`No artifact with name ${buildType} found to deploy`);
+            return;
+        }
 
-        await downloadFile(citizen_build_url, downloadedZipFilePath);
-        log.debug("Citizen build downloaded successfully");
-        let destDirectory = "./citizen/build";
-        let bakZipFile = "./citizen/citizen.zip.bak";
-        let destZipFile ="./citizen/citizen.zip"
-        await backupAndExtract(downloadedZipFilePath, destDirectory, bakZipFile, destZipFile);
-        log.debug("Citizen deployment completed successfully");
-        
-        await downloadFile(employee_build_url, downloadedZipFilePath);
-        log.debug("Employee build downloaded successfully");
-        destDirectory = "./employee/build";
-        bakZipFile = "./employee/employee.zip.bak";
-        destZipFile ="./employee/employee.zip"
-        await backupAndExtract(downloadedZipFilePath, destDirectory, bakZipFile, destZipFile);
-        log.debug("Employee deployment completed successfully");
-
+        await downloadAndDeploy(artifactUrl["archive_download_url"], buildType);
     } catch (err) {
         console.error(err);
     }
 }
 
+async function downloadAndDeploy(archiveUrl, buildType) {
+    const downloadedZipFilePath = `${buildType}-build.zip`;
+    await downloadFile(archiveUrl, downloadedZipFilePath);
+    log.debug(`${buildType} build downloaded successfully`);
+    const destDirectory = `./${buildType}/build`;
+    const bakZipFile = `./${buildType}/${buildType}.zip.bak`;
+    const destZipFile = `./${buildType}/${buildType}.zip`;
+    await backupAndExtract(downloadedZipFilePath, destDirectory, bakZipFile, destZipFile);
+    log.debug(`${buildType} deployment completed successfully`);
+}
 exports.main = main;
