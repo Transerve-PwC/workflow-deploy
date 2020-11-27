@@ -11,7 +11,10 @@ const log = {
     },
     debug : function(str, ...params) {
         this._log("DEBUG", str, ...params);
-    }
+    },
+    warn : function(str, ...params) {
+        this._log("WARN", str, ...params);
+    },
 }
 
 /**
@@ -55,18 +58,17 @@ async function downloadFile(url, path) {
             "Authorization" : `token ${OAUTH_TOKEN}`,
             "User-Agent": "Transerve-PwC"
         }}, res => {
-            log.debug("Response status code ", res.statusCode);
+            log.debug("Response status code ", res.statusCode, url);
             const isRedirect = res.statusCode >= 302;
             const success = res.statusCode >= 200 && res.statusCode < 300;
             if (isRedirect) {
-                log.debug("Redirecting to ", res.headers.location);
+                log.debug("Redirecting from ", res.url, "to", res.headers.location);
                 return downloadFile(res.headers.location, path).then(resolve);
             }
             if (success) {
                 const fileStream = fs.createWriteStream(path);
-                    res.pipe(fileStream);
+                res.pipe(fileStream);
                 res.on('end', () => {
-                    log.debug("res.pipe end");
                     return resolve("success");
                 })
             } else {
@@ -111,7 +113,7 @@ async function backupAndExtract(generatedZipFile, destDirectory, bakFile, zipFil
             fs.unlinkSync(bakFile);
             log.debug("Removed .bak file successfully", bakFile);
         } catch (err) {
-            log.debug("Could not delete .bak file", bakFile);
+            log.warn("Could not delete .bak file", bakFile);
         }
 
         //Rename existing zip file as .bak
@@ -119,7 +121,7 @@ async function backupAndExtract(generatedZipFile, destDirectory, bakFile, zipFil
             fs.renameSync(zipFilePath, bakFile);
             log.debug("Moved .zip file to .bak successfully", zipFilePath, bakFile);
         } catch (e) {
-            log.debug("Could not move .zip file to .bak", zipFilePath, bakFile);
+            log.warn("Could not move .zip file to .bak", zipFilePath, bakFile);
         }
 
         //Recursively delete build folder
@@ -127,7 +129,7 @@ async function backupAndExtract(generatedZipFile, destDirectory, bakFile, zipFil
             deleteFolderRecursiveSync(destDirectory);
             log.debug("Recursively deleted build folder", destDirectory);
         } catch (e) {
-            log.debug("Could not delete build folder", destDirectory);
+            log.warn("Could not delete build folder", destDirectory);
         }
 
         //unzip downloaded file as build folder.
@@ -151,7 +153,7 @@ async function backupAndExtract(generatedZipFile, destDirectory, bakFile, zipFil
             fs.renameSync(generatedZipFile, zipFilePath);
             log.debug("Moved build.zip to final zip file path", generatedZipFile, zipFilePath);
         } catch (e) {
-            log.debug("Could not move build.zip to final zip file path", generatedZipFile, zipFilePath);
+            log.warn("Could not move build.zip to final zip file path", generatedZipFile, zipFilePath);
         }
     })
 }
@@ -159,6 +161,8 @@ async function backupAndExtract(generatedZipFile, destDirectory, bakFile, zipFil
 async function sleep(t = 5) {
     return new Promise(resolve => setTimeout(resolve, t * 1000));
 }
+
+const allowedBuildTypes = ["citizen", "employee"];
 
 async function main(owner = "Transerve-PwC", repo = "frontend", buildType = 'citizen') {
     try{
@@ -169,15 +173,15 @@ async function main(owner = "Transerve-PwC", repo = "frontend", buildType = 'cit
         const latestWorkflow = workflow_runs[0];
         log.debug(`Proceeding with deployment for latest workflow ${latestWorkflow.id} with status ${latestWorkflow.status}`);
         
-        const artifact_url = workflow_runs[0].artifacts_url;
-        const {artifacts} = await readUrl(artifact_url);
-        const artifactUrl = artifacts.find(item => item.name === buildType);
-        if (typeof artifactUrl === "undefined") {
-            log.debug(`No artifact with name ${buildType} found to deploy`, artifacts);
-            return;
+        const artifactsApiUrl = workflow_runs[0].artifacts_url;
+        const { artifacts } = await readUrl(artifactsApiUrl);
+        const artifactsToBeDeployed = artifacts.filter(artifact => allowedBuildTypes.includes(artifact.name));
+        if (artifactsToBeDeployed.length == 0) {
+            log.warn("No artifacts found to be deployed");
         }
-
-        await downloadAndDeploy(artifactUrl["archive_download_url"], buildType);
+        for (let artifact of artifactsToBeDeployed) {
+            await downloadAndDeploy(artifact["archive_download_url"], artifact.name);
+        }
     } catch (err) {
         console.error(err);
     }
