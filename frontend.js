@@ -28,7 +28,7 @@ async function readUrl(url) {
             "Authorization" : `token ${OAUTH_TOKEN}`,
             "User-Agent": "Transerve-PwC"
         }}, res => {
-            log.debug("Response status code ", res.statusCode);
+            log.debug("Response status code ", res.statusCode, url);
             const success = res.statusCode >= 200 && res.statusCode < 300;
             let body = "";
             res.on('data', (chunk) => {
@@ -62,7 +62,7 @@ async function downloadFile(url, path) {
             const isRedirect = res.statusCode >= 302;
             const success = res.statusCode >= 200 && res.statusCode < 300;
             if (isRedirect) {
-                log.debug("Redirecting from ", res.url, "to", res.headers.location);
+                log.debug("Redirecting from ", url, "to", res.headers.location);
                 return downloadFile(res.headers.location, path).then(resolve);
             }
             if (success) {
@@ -111,25 +111,25 @@ async function backupAndExtract(generatedZipFile, destDirectory, bakFile, zipFil
         //Remove bak file.
         try {
             fs.unlinkSync(bakFile);
-            log.debug("Removed .bak file successfully", bakFile);
+            log.debug("2. Removed .bak file successfully", bakFile);
         } catch (err) {
-            log.warn("Could not delete .bak file", bakFile);
+            log.warn("2. Could not delete .bak file", bakFile);
         }
 
         //Rename existing zip file as .bak
         try {
             fs.renameSync(zipFilePath, bakFile);
-            log.debug("Moved .zip file to .bak successfully", zipFilePath, bakFile);
+            log.debug("3. Moved .zip file to .bak successfully", zipFilePath, bakFile);
         } catch (e) {
-            log.warn("Could not move .zip file to .bak", zipFilePath, bakFile);
+            log.warn("3. Could not move .zip file to .bak", zipFilePath, bakFile);
         }
 
         //Recursively delete build folder
         try {
             deleteFolderRecursiveSync(destDirectory);
-            log.debug("Recursively deleted build folder", destDirectory);
+            log.debug("4. Recursively deleted build folder", destDirectory);
         } catch (e) {
-            log.warn("Could not delete build folder", destDirectory);
+            log.warn("4. Could not delete build folder", destDirectory);
         }
 
         //unzip downloaded file as build folder.
@@ -145,15 +145,15 @@ async function backupAndExtract(generatedZipFile, destDirectory, bakFile, zipFil
         });
         
         ls.on('close', (code) => {
-          log.debug("Downloaded zip file expanded", generatedZipFile);
+          log.debug("5. Downloaded zip file expanded", generatedZipFile);
           resolve();
         });
     }).then(_ => {
         try {
             fs.renameSync(generatedZipFile, zipFilePath);
-            log.debug("Moved build.zip to final zip file path", generatedZipFile, zipFilePath);
+            log.debug("6. Moved build.zip to final zip file path", generatedZipFile, zipFilePath);
         } catch (e) {
-            log.warn("Could not move build.zip to final zip file path", generatedZipFile, zipFilePath);
+            log.warn("6. Could not move build.zip to final zip file path", generatedZipFile, zipFilePath);
         }
     })
 }
@@ -188,13 +188,16 @@ async function main(owner = "Transerve-PwC", repo = "frontend", buildType = 'cit
 }
 
 async function downloadAndDeploy(archiveUrl, buildType) {
+    log.debug(`+++++++++++${buildType}+++++++++++`);
+    log.debug(`${buildType} deployment started`);
     const downloadedZipFilePath = `${buildType}-build.zip`;
     await downloadFile(archiveUrl, downloadedZipFilePath);
-    log.debug(`${buildType} build downloaded successfully`);
+    log.debug(`1. ${buildType} build downloaded successfully`);
     const destDirectory = `./${buildType}/build`;
     const bakZipFile = `./${buildType}/${buildType}.zip.bak`;
     const destZipFile = `./${buildType}/${buildType}.zip`;
     await backupAndExtract(downloadedZipFilePath, destDirectory, bakZipFile, destZipFile);
     log.debug(`${buildType} deployment completed successfully`);
+    log.debug(`-----------${buildType}-----------`);
 }
 exports.main = main;
