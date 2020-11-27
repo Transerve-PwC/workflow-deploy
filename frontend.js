@@ -173,7 +173,7 @@ async function main(owner = "Transerve-PwC", repo = "frontend", buildType = 'cit
         const {artifacts} = await readUrl(artifact_url);
         const artifactUrl = artifacts.find(item => item.name === buildType);
         if (typeof artifactUrl === "undefined") {
-            log.debug(`No artifact with name ${buildType} found to deploy`);
+            log.debug(`No artifact with name ${buildType} found to deploy`, artifacts);
             return;
         }
 

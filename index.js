@@ -15,12 +15,12 @@ const requestListener = function (req, res) {
         const owner = components[3];
         const repo = components[4];
         const buildType = components[5];
-        console.log(`Deployment started for ${owner}/${buildType} build type ${buildType}`);
+        console.log(`Deployment started for ${owner}/${repo} build type ${buildType}`);
         main(owner, repo, buildType).then(_ => {
-            console.log(`Deployment successful for ${owner}/${buildType} build type ${buildType}`);
+            console.log(`Deployment successful for ${owner}/${repo} build type ${buildType}`);
         });
         res.writeHead(200);
-        res.end(JSON.stringify({"message" : `Deployment started for ${owner}/${buildType} build type ${buildType}`}));
+        res.end(JSON.stringify({"message" : `Deployment started for ${owner}/${repo} build type ${buildType}`}));
     } else {
         res.writeHead(404);
         res.end(JSON.stringify({error:"Resource not found"}));
